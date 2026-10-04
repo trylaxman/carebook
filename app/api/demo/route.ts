@@ -3,8 +3,9 @@ import { times, dateKey, seed, Patient } from '@/lib/data';
 import { randomUUID } from 'node:crypto';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
-export async function GET(){return Response.json(await transaction(s=>s))}
-export async function POST(request:Request){try{const b=await request.json();const result=await transaction(s=>{
+const browserOnly=()=>Response.json({error:'This hosted prototype stores demo data in the browser. The SQLite API is for local use only.'},{status:410});
+export async function GET(){if(process.env.VERCEL)return browserOnly();return Response.json(await transaction(s=>s))}
+export async function POST(request:Request){if(process.env.VERCEL)return browserOnly();try{const b=await request.json();const result=await transaction(s=>{
 if(b.action==='reset'){Object.assign(s,seed());return s}
 if(b.action==='login'){const p=s.patients.find(p=>p.email.toLowerCase()===String(b.email).toLowerCase());if(!p)throw Error('No demo account found. Please register.');return p}
 if(b.action==='register'){if(!b.name?.trim()||!/^\S+@\S+\.\S+$/.test(b.email))throw Error('Enter a name and valid email.');if(s.patients.some(p=>p.email.toLowerCase()===b.email.toLowerCase()))throw Error('An account with this email already exists.');const p:Patient={id:randomUUID(),name:b.name.trim(),email:b.email.toLowerCase(),phone:b.phone||'',dob:'',gender:'Prefer not to say',blood:'Unknown',allergies:'None'};s.patients.push(p);return p}

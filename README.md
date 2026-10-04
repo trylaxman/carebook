@@ -1,6 +1,6 @@
 # Carebook
 
-A mobile-first healthcare booking prototype built with **Next.js App Router**, **TypeScript**, and **SQLite**. Carebook demonstrates the patient journey from finding a doctor to booking and managing appointments, alongside a basic clinic admin workspace.
+A mobile-first healthcare booking prototype built with **Next.js App Router**, **TypeScript**, and **browser localStorage**. Carebook demonstrates the patient journey from finding a doctor to booking and managing appointments, alongside a basic clinic admin workspace.
 
 The interface stays inside a **414px mobile frame centered in the browser** and fills the available width on smaller screens. All clinicians, services, and patient records are fictional demo data.
 
@@ -15,7 +15,7 @@ The interface stays inside a **414px mobile frame centered in the browser** and 
 - Searchable doctor and service listings with specialty filters.
 - Provider details with consultation fees, duration, experience, and clinic information.
 - Appointment booking with available dates and time slots.
-- Server-side slot conflict checks to prevent duplicate confirmed bookings.
+- Slot conflict checks within the current browser’s demo data.
 - Optional visit notes and a payment preference: pay at clinic or simulated card payment.
 - Booking confirmation with a unique reference and an in-app notification.
 - Appointment details, rescheduling, cancellation, and booking history.
@@ -39,7 +39,8 @@ The interface stays inside a **414px mobile frame centered in the browser** and 
 | Styling | CSS with a responsive mobile shell |
 | Icons | Lucide React |
 | API | Next.js Route Handler |
-| Persistence | SQLite through Node.js `node:sqlite` |
+| Hosted demo persistence | Browser localStorage |
+| Optional local API persistence | SQLite through Node.js `node:sqlite` |
 | Demo account selection | Browser localStorage |
 
 ## Getting started
@@ -50,7 +51,7 @@ The interface stays inside a **414px mobile frame centered in the browser** and 
 - npm.
 - A writable local filesystem for the SQLite database.
 
-No API keys, environment variables, or separate database installation are required.
+No API keys, environment variables, or separate database installation are required. The patient interface works on Vercel using browser localStorage.
 
 ### Install and run
 
@@ -107,7 +108,9 @@ components/
   care-app.tsx               Patient screens and clinic workspace
 lib/
   data.ts                   Types, sample records, and slot helpers
-  store.ts                  SQLite persistence and transactions
+  browser-store.ts          Browser persistence and tab locking
+  demo-actions.ts           Browser demo action rules
+  store.ts                  Optional local SQLite API storage
 tests/
   api.mjs                   API integration checks
   smoke.cjs                 Optional Playwright UI walkthrough
@@ -117,13 +120,11 @@ Next.js App Router serves the page and API. Internal app screens use React state
 
 ## Data and scheduling
 
-The database is created automatically at:
+The hosted patient interface stores sample records in browser localStorage under `carebook-demo-state-v1`. The selected demo patient uses `carebook-patient`. Data survives reloads in the same browser and origin, but is not shared between devices or separate deployment URLs. Clearing browser site data resets it.
 
-```text
-data/carebook.sqlite
-```
+When browser storage is blocked, the demo falls back to memory for the current page session. Web Locks serialize edits between tabs on the same origin where supported; this is not a multi-user server booking system.
 
-Providers, patients, bookings, and notifications are stored as keyed JSON records in separate SQLite tables. Records persist across server restarts when the database file is retained. Generated database files are excluded from git.
+The optional local API still uses `data/carebook.sqlite`, separately from the browser demo. Its records are not synchronized with the patient interface. On Vercel the API returns HTTP 410 without opening SQLite, so it never attempts to write to the hosting filesystem.
 
 The demo includes four doctors and two clinic services. Appointments can be booked for the next 14 days, with 10 predefined daily slots and 30-minute visits. Dates use the clinic timezone, `America/New_York`.
 
@@ -131,7 +132,9 @@ Rescheduling creates a new appointment and marks the original cancelled. Cancell
 
 ## API overview
 
-`GET /api/demo` returns the shared demo state.
+The following API is optional and for **local development only**. The hosted interface does not call it.
+
+`GET /api/demo` returns the local SQLite demo state.
 
 `POST /api/demo` accepts a JSON body with an `action` and the relevant fields:
 
@@ -147,6 +150,13 @@ Rescheduling creates a new appointment and marks the original cancelled. Cancell
 | `reset` | No additional fields |
 
 ## Testing
+
+Browser storage and action rules can be checked without Chromium:
+
+```bash
+node tests/browser-store.cjs
+```
+
 
 Build and TypeScript checks:
 
@@ -171,14 +181,14 @@ npx playwright install chromium
 node tests/smoke.cjs
 ```
 
-Reset the demo before running the browser walkthrough. Screenshots are written to `test-results/`.
+Use **Reset demo data** in the clinic workspace before running the browser walkthrough. The API test resets its separate SQLite dataset only. Screenshots are written to `test-results/`.
 
 The production build and API integration suite passed during initial development. The browser walkthrough is included but was not executed successfully in the creation environment because Chromium could not be downloaded.
 
 ## Prototype boundaries
 
 - Sign-in uses email only and does not authenticate a real identity.
-- Patient and admin API actions are open for demonstration; there is no role-based access control.
+- The clinic workspace manages records stored in the same browser; it is a simulated admin experience with no role-based access control.
 - Card payments are simulated, with no card collection or charges.
 - Notifications are in-app only; email, SMS, and push delivery are not connected.
 - Scheduling uses predefined daily slots without holiday or provider calendar integrations.
@@ -187,7 +197,7 @@ The production build and API integration suite passed during initial development
 
 Use fictional information only. A production implementation needs authenticated sessions, patient and staff authorization, a production database design, scheduling rules, and the relevant payment and notification integrations.
 
-The current SQLite setup is intended for a single demo server with persistent writable storage. Ephemeral serverless hosting requires a different persistence approach.
+The hosted interface is Vercel-compatible without a backend database. Shared patient data across devices will require a hosted database and authenticated backend. The optional SQLite API remains suitable only for local use or a server with persistent writable storage.
 
 ## Customization
 
@@ -195,3 +205,13 @@ The current SQLite setup is intended for a single demo server with persistent wr
 - **Brand colors and mobile styling:** Edit `app/globals.css`.
 - **Screens and interaction flows:** Edit `components/care-app.tsx`.
 - **Backend behavior:** Edit `app/api/demo/route.ts` and `lib/store.ts`.
+
+## Deploy on Vercel
+
+1. Push the project to GitHub.
+2. In Vercel, select **Add New → Project** and import the repository.
+3. Keep **Next.js** as the framework and choose the directory containing `package.json` as the root.
+4. Use `npm ci` for installation and `npm run build` for the build; leave the output directory at its default.
+5. Select Node.js 24 and deploy. No environment variables are required.
+
+The patient interface and clinic workspace use localStorage, so no SQLite writes occur on Vercel. Each visitor receives an independent sample dataset. This does not provide shared backend persistence.
